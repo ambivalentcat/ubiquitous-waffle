@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GymLingo Pro: Тренажер Английского</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        /* Custom Styles */
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: #FAFAF9; /* warm gray 50 */
+            color: #1C1917; /* warm gray 900 */
+        }
+        
+        .glass-nav {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+
+        /* Chart Container */
+        .chart-container {
+            position: relative;
+            width: 100%;
+            height: 300px;
+        }
+        @media (min-width: 768px) {
+            .chart-container { height: 350px; }
+        }
+
+        /* Card Flip Animation */
+        .card-perspective { perspective: 1000px; }
+        .card-inner {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            text-align: center;
+            transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+            transform-style: preserve-3d;
+            will-change: transform; /* Performance optimization */
+        }
+        .is-flipped .card-inner { transform: rotateY(180deg); }
+        .card-face {
+            /* FIX: Added !important to override any conflicting Tailwind classes like 'relative' */
+            position: absolute !important;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            -webkit-backface-visibility: hidden;
+            backface-visibility: hidden;
+            border-radius: 1.5rem; /* rounded-3xl */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.1);
+        }
+        .card-back { transform: rotateY(180deg); background: #fff; }
+        .card-front { background: white; border: 1px solid #F5F5F4; }
+
+        /* Smooth Fade In */
+        .fade-in { animation: fadeIn 0.5s ease-out forwards; opacity: 0; transform: translateY(10px); }
+        @keyframes fadeIn { to { opacity: 1; transform: translateY(0); } }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #D6D3D1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #A8A29E; }
+    </style>
+    <!-- Chosen Palette: "Modern Clean" - Stone/White base with Vibrant Amber & Slate accents for focus and energy. -->
+</head>
+<body class="min-h-screen flex flex-col selection:bg-amber-200 selection:text-amber-900">
+
+    <!-- Navigation / Header (Glassmorphism) -->
+    <header class="glass-nav fixed top-0 w-full z-50 border-b border-stone-200/50 transition-all duration-300">
+        <div class="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex justify-between items-center">
+            <div class="flex items-center gap-2">
+                <span class="text-3xl">🏋️</span>
+                <h1 class="text-2xl font-bold bg-gradient-to-r from-stone-800 to-stone-600 bg-clip-text text-transparent tracking-tight">GymLingo <span class="text-amber-500 text-sm font-medium uppercase tracking-widest align-top ml-1">Pro</span></h1>
+            </div>
+            <nav class="hidden md:flex space-x-1 bg-stone-100/50 p-1 rounded-full border border-stone-200/50">
+                <button onclick="scrollToSection('dashboard')" class="px-5 py-2 rounded-full text-sm font-medium text-stone-600 hover:bg-white hover:text-amber-600 hover:shadow-sm transition-all">Обзор</button>
+                <button onclick="scrollToSection('dictionary')" class="px-5 py-2 rounded-full text-sm font-medium text-stone-600 hover:bg-white hover:text-amber-600 hover:shadow-sm transition-all">Словарь</button>
+                <button onclick="scrollToSection('trainer')" class="px-5 py-2 rounded-full text-sm font-medium text-stone-600 hover:bg-white hover:text-amber-600 hover:shadow-sm transition-all">Тренажер</button>
+            </nav>
+        </div>
+    </header>
+
+    <main class="flex-grow pt-28 pb-12 max-w-6xl mx-auto px-4 sm:px-6 w-full space-y-20">
+
+        <!-- Hero / Intro -->
+        <section class="text-center space-y-4 mb-12 fade-in">
+            <h2 class="text-4xl md:text-5xl font-bold text-stone-900 leading-tight">
+                Говори в зале <span class="text-amber-500">уверенно</span>
+            </h2>
+            <p class="text-lg text-stone-500 max-w-2xl mx-auto">
+                Интерактивный помощник для изучения английской лексики тренажерного зала. 
+                Учите слова, тренируйте произношение и отслеживайте прогресс.
+            </p>
+        </section>
+
+        <!-- Section 1: Dashboard (Interactive Chart) -->
+        <section id="dashboard" class="scroll-mt-32 fade-in" style="animation-delay: 0.1s;">
+            <div class="bg-white rounded-3xl p-8 shadow-xl shadow-stone-200/50 border border-stone-100">
+                <div class="flex flex-col md:flex-row items-center gap-12">
+                    <!-- Chart -->
+                    <div class="w-full md:w-1/2 relative">
+                        <div class="chart-container">
+                            <canvas id="vocabChart"></canvas>
+                        </div>
+                        <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                            <div class="text-center bg-white/90 backdrop-blur-sm p-3 rounded-2xl shadow-sm border border-stone-100">
+                                <span class="block text-3xl font-bold text-stone-800" id="total-count">0</span>
+                                <span class="text-xs text-stone-500 uppercase tracking-wide font-medium">Всего фраз</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Context & Stats -->
+                    <div class="w-full md:w-1/2 space-y-6">
+                        <div>
+                            <h3 class="text-2xl font-bold text-stone-800 mb-2">Аналитика контента</h3>
+                            <p class="text-stone-500 text-sm">Нажмите на сектор диаграммы, чтобы отфильтровать словарь по выбранной категории.</p>
+                        </div>
+                        
+                        <div class="grid grid-cols-2 gap-3">
+                            <div onclick="filterByClick('general')" class="cursor-pointer group p-4 rounded-2xl bg-amber-50 border border-amber-100 hover:bg-amber-100 transition-colors">
+                                <div class="text-2xl mb-1">🗣️</div>
+                                <div class="font-bold text-stone-800 group-hover:text-amber-700">Общение</div>
+                                <div class="text-sm text-stone-500" id="stat-general-count">0 фраз</div>
+                            </div>
+                            <div onclick="filterByClick('exercises')" class="cursor-pointer group p-4 rounded-2xl bg-blue-50 border border-blue-100 hover:bg-blue-100 transition-colors">
+                                <div class="text-2xl mb-1">💪</div>
+                                <div class="font-bold text-stone-800 group-hover:text-blue-700">Упражнения</div>
+                                <div class="text-sm text-stone-500" id="stat-exercises-count">0 фраз</div>
+                            </div>
+                            <div onclick="filterByClick('process')" class="cursor-pointer group p-4 rounded-2xl bg-emerald-50 border border-emerald-100 hover:bg-emerald-100 transition-colors">
+                                <div class="text-2xl mb-1">⏱️</div>
+                                <div class="font-bold text-stone-800 group-hover:text-emerald-700">Процесс</div>
+                                <div class="text-sm text-stone-500" id="stat-process-count">0 фраз</div>
+                            </div>
+                            <div onclick="filterByClick('muscles')" class="cursor-pointer group p-4 rounded-2xl bg-purple-50 border border-purple-100 hover:bg-purple-100 transition-colors">
+                                <div class="text-2xl mb-1">🦵</div>
+                                <div class="font-bold text-stone-800 group-hover:text-purple-700">Мышцы</div>
+                                <div class="text-sm text-stone-500" id="stat-muscles-count">0 фраз</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 2: Smart Dictionary -->
+        <section id="dictionary" class="scroll-mt-32 fade-in" style="animation-delay: 0.2s;">
+            <div class="flex flex-col md:flex-row justify-between items-end mb-8 gap-4">
+                <div>
+                    <h2 class="text-3xl font-bold text-stone-800">Умный Словарь</h2>
+                    <p class="text-stone-500 mt-1">Используйте поиск или фильтры. Нажмите <span class="inline-flex items-center justify-center w-6 h-6 bg-stone-200 rounded-full text-xs">🔊</span> чтобы услышать.</p>
+                </div>
+                <div class="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+                    <div class="relative group">
+                        <input type="text" id="searchInput" placeholder="Поиск фразы..." 
+                            class="w-full sm:w-64 pl-10 pr-4 py-3 bg-white border border-stone-200 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 transition-all">
+                        <span class="absolute left-3 top-3.5 text-stone-400 group-focus-within:text-amber-500 transition-colors">🔍</span>
+                    </div>
+                    <select id="categoryFilter" class="px-4 py-3 bg-white border border-stone-200 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50 cursor-pointer hover:border-amber-300 transition-all">
+                        <option value="all">Все категории</option>
+                        <option value="general">Общие фразы</option>
+                        <option value="exercises">Упражнения</option>
+                        <option value="process">Процесс</option>
+                        <option value="muscles">Мышцы</option>
+                    </select>
+                </div>
+            </div>
+
+            <div id="dictionaryGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                <!-- JS Injected Cards -->
+            </div>
+            
+            <div id="noResults" class="hidden flex flex-col items-center justify-center py-16 text-center text-stone-400 bg-white rounded-3xl border border-stone-100 border-dashed">
+                <span class="text-4xl mb-2">😕</span>
+                <p>Ничего не найдено по вашему запросу.</p>
+            </div>
+        </section>
+
+        <!-- Section 3: Flashcard Trainer -->
+        <section id="trainer" class="scroll-mt-32 mb-12 fade-in" style="animation-delay: 0.3s;">
+            <div class="bg-stone-900 rounded-[2.5rem] p-8 md:p-12 text-white shadow-2xl relative overflow-hidden">
+                <!-- Decorative blurred orbs -->
+                <div class="absolute top-0 right-0 w-64 h-64 bg-amber-500/20 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none"></div>
+                <div class="absolute bottom-0 left-0 w-64 h-64 bg-blue-500/20 rounded-full blur-3xl -ml-16 -mb-16 pointer-events-none"></div>
+
+                <div class="relative z-10 max-w-2xl mx-auto text-center">
+                    <span class="inline-block py-1 px-3 rounded-full bg-white/10 border border-white/20 text-xs font-semibold tracking-wider uppercase mb-4 text-amber-300">Режим Обучения</span>
+                    <h2 class="text-3xl font-bold mb-8">Флэш-карточки</h2>
+                    
+                    <!-- Trainer Controls -->
+                    <div class="flex justify-between items-center text-sm font-medium text-stone-400 mb-4 px-2">
+                        <div class="flex items-center gap-2">
+                            <span>Карточка <span id="currentCardNum" class="text-white">1</span> / <span id="totalCardsNum">0</span></span>
+                            <span class="w-1 h-1 bg-stone-600 rounded-full"></span>
+                            <span id="categoryBadgeTrainer" class="text-amber-400">Категория</span>
+                        </div>
+                        <button onclick="resetLearned()" class="hover:text-white transition-colors text-xs underline decoration-stone-600 hover:decoration-white">Сбросить прогресс</button>
+                    </div>
+
+                    <!-- Progress Bar -->
+                    <div class="w-full h-1.5 bg-white/10 rounded-full mb-8 overflow-hidden">
+                        <div id="progressBar" class="h-full bg-gradient-to-r from-amber-400 to-orange-500 transition-all duration-300" style="width: 0%"></div>
+                    </div>
+
+                    <!-- The Card -->
+                    <div class="h-80 w-full mb-8 cursor-pointer group card-perspective" onclick="flipCard()">
+                        <div class="card-inner" id="flashcard">
+                            <!-- Front -->
+                            <div class="card-face card-front overflow-hidden">
+                                <div class="absolute top-0 left-0 w-full h-1 bg-stone-100"></div>
+                                <div class="text-5xl mb-6 opacity-80 grayscale">🇷🇺</div>
+                                <h3 id="cardRu" class="text-2xl md:text-3xl font-bold text-stone-800 mb-2 px-4">...</h3>
+                                <p class="text-stone-400 text-sm mt-auto pb-6 flex items-center gap-2">
+                                    <span class="w-4 h-4 rounded-full border border-stone-300 flex items-center justify-center text-[10px]">␣</span>
+                                    Пробел для переворота
+                                </p>
+                            </div>
+                            <!-- Back -->
+                            <div class="card-face card-back overflow-hidden">
+                                <div class="absolute top-0 left-0 w-full h-1 bg-amber-500"></div>
+                                <div class="absolute top-4 right-4">
+                                    <button onclick="playAudioFromCard(event)" class="w-10 h-10 rounded-full bg-amber-50 hover:bg-amber-100 text-amber-600 flex items-center justify-center transition-colors">
+                                        🔊
+                                    </button>
+                                </div>
+                                <div class="text-5xl mb-4 opacity-80 grayscale">🇬🇧</div>
+                                <h3 id="cardEn" class="text-2xl md:text-3xl font-bold text-stone-900 mb-2 px-4">...</h3>
+                                <p id="cardTrans" class="text-lg text-amber-600 italic font-medium mb-6">...</p>
+                                <button onclick="markAsLearned(event)" class="mb-4 px-4 py-2 bg-stone-100 hover:bg-green-100 hover:text-green-700 text-stone-500 rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
+                                    <span>✅</span> Я выучил это
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Buttons -->
+                    <div class="flex justify-center items-center gap-4">
+                        <button onclick="prevCard()" class="w-14 h-14 rounded-full bg-white/10 hover:bg-white/20 border border-white/10 text-white flex items-center justify-center transition-all backdrop-blur-md active:scale-95" title="Назад (Стрелка влево)">
+                            ←
+                        </button>
+                        <button onclick="shuffleCards()" class="px-6 h-14 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-stone-300 text-sm font-medium transition-all backdrop-blur-md flex items-center gap-2">
+                            <span>🔀</span> Перемешать
+                        </button>
+                        <button onclick="nextCard()" class="w-14 h-14 rounded-full bg-amber-500 hover:bg-amber-400 text-stone-900 flex items-center justify-center shadow-lg shadow-amber-500/20 transition-all active:scale-95" title="Вперед (Стрелка вправо)">
+                            →
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-stone-200 py-10">
+        <div class="max-w-6xl mx-auto px-4 flex flex-col md:flex-row justify-between items-center text-sm text-stone-500 gap-4">
+            <div>
+                <span class="font-bold text-stone-800">GymLingo Pro</span> • Interactive Learning
+            </div>
+            <div class="text-center md:text-right">
+                <p>Generated for Canvas • 2024</p>
+                <p class="text-xs mt-1">Используйте 🎧 наушники для лучшего опыта</p>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // --- DATA ---
+        const gymData = [
+            { ru: "Все в порядке?", en: "Are you okay?", trans: "Ар ю оукей?", category: "general" },
+            { ru: "Сделал?", en: "Done?", trans: "Дан?", category: "general" },
+            { ru: "Сколько ещё?", en: "How many more?", trans: "Хау мэни мор?", category: "general" },
+            { ru: "Устал?", en: "Tired?", trans: "Тайэрд?", category: "general" },
+            { ru: "Тяжело?", en: "Too heavy?", trans: "Ту хеви?", category: "general" },
+            { ru: "Легко?", en: "Easy?", trans: "Изи?", category: "general" },
+            { ru: "Ещё добавим", en: "Let’s add more", trans: "Лэтс эдд мор", category: "general" },
+            { ru: "Жим штанги", en: "Barbell bench press", trans: "Барбэл бэнч пресс", category: "exercises" },
+            { ru: "Жим гантелей", en: "Dumbbell bench press", trans: "Дамбэл бэнч пресс", category: "exercises" },
+            { ru: "Сгибание рук", en: "Biceps curls", trans: "Байсепс кёрлз", category: "exercises" },
+            { ru: "Разгибание рук", en: "Triceps extensions", trans: "Трайсепс экстэншнз", category: "exercises" },
+            { ru: "Тяга штанги в наклоне", en: "Bent-over barbell row", trans: "Бэнт оувер барбэл роув", category: "exercises" },
+            { ru: "Тяга вертикального блока", en: "Lat pulldown", trans: "Лэт пулдаун", category: "exercises" },
+            { ru: "Тяга горизонтального блока", en: "Seated cable row", trans: "Ситид кэйбл роув", category: "exercises" },
+            { ru: "Делай подход", en: "Do a set", trans: "Ду э сет", category: "exercises" },
+            { ru: "Делать растяжку", en: "Do stretching", trans: "Ду стрэчинг", category: "exercises" },
+            { ru: "9–15 повторений", en: "9–15 reps", trans: "Найн ту фифтин репс", category: "process" },
+            { ru: "Отдых пару минут", en: "Rest a couple of minutes", trans: "Рест э капл ов минутс", category: "process" },
+            { ru: "Добавлять вес", en: "Add weight", trans: "Эдд уэйт", category: "process" },
+            { ru: "Качаем ноги", en: "We’re training legs", trans: "Уиэр трэйнинг лэгз", category: "muscles" },
+            { ru: "Качаем спину", en: "We’re training back", trans: "Уиэр трэйнинг бэк", category: "muscles" },
+            { ru: "Качаем грудь", en: "We’re training chest", trans: "Уиэр трэйнинг чэст", category: "muscles" },
+            { ru: "Качаем плечи", en: "We’re training shoulders", trans: "Уиэр трэйнинг шоулдэрз", category: "muscles" },
+            { ru: "Качаем руки", en: "We’re training arms", trans: "Уиэр трэйнинг армз", category: "muscles" }
+        ];
+
+        // --- STATE ---
+        let state = {
+            currentCardIndex: 0,
+            activeCards: [...gymData], // Cards not yet "learned"
+            learnedCards: [],
+            filterCategory: 'all',
+            searchQuery: ''
+        };
+
+        const config = {
+            colors: {
+                general: '#f59e0b', // amber-500
+                exercises: '#3b82f6', // blue-500
+                process: '#10b981', // emerald-500
+                muscles: '#a855f7'  // purple-500
+            },
+            labels: {
+                general: "Общие фразы",
+                exercises: "Упражнения",
+                process: "Процесс",
+                muscles: "Мышцы"
+            }
+        };
+
+        // --- CHART ---
+        let vocabChart;
+
+        function initChart() {
+            const counts = { general: 0, exercises: 0, process: 0, muscles: 0 };
+            gymData.forEach(item => counts[item.category]++);
+
+            // Update HTML Stats
+            document.getElementById('total-count').textContent = gymData.length;
+            document.getElementById('stat-general-count').textContent = counts.general;
+            document.getElementById('stat-exercises-count').textContent = counts.exercises;
+            document.getElementById('stat-process-count').textContent = counts.process;
+            document.getElementById('stat-muscles-count').textContent = counts.muscles;
+
+            const ctx = document.getElementById('vocabChart').getContext('2d');
+            
+            vocabChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: Object.values(config.labels),
+                    datasets: [{
+                        data: Object.values(counts),
+                        backgroundColor: Object.values(config.colors),
+                        borderWidth: 0,
+                        hoverOffset: 15,
+                        borderRadius: 5
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '75%', // Thinner ring
+                    layout: { padding: 20 },
+                    onClick: (evt, elements) => {
+                        if (elements.length > 0) {
+                            const index = elements[0].index;
+                            const categoryKeys = Object.keys(config.labels);
+                            const selectedCategory = categoryKeys[index];
+                            filterByClick(selectedCategory);
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: '#fff',
+                            titleColor: '#1c1917',
+                            bodyColor: '#57534e',
+                            borderColor: '#e7e5e4',
+                            borderWidth: 1,
+                            padding: 12,
+                            cornerRadius: 8,
+                            displayColors: true,
+                            callbacks: {
+                                label: function(context) {
+                                    const value = context.raw;
+                                    const total = context.chart._metasets[context.datasetIndex].total;
+                                    const percentage = Math.round((value / total) * 100) + '%';
+                                    return ` ${value} фраз (${percentage})`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // --- DICTIONARY ---
+        function speak(text) {
+            if ('speechSynthesis' in window) {
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'en-US';
+                utterance.rate = 0.9;
+                window.speechSynthesis.speak(utterance);
+            }
+        }
+
+        function filterByClick(category) {
+            state.filterCategory = category;
+            document.getElementById('categoryFilter').value = category;
+            renderDictionary();
+            scrollToSection('dictionary');
+        }
+
+        function renderDictionary() {
+            const grid = document.getElementById('dictionaryGrid');
+            const noResults = document.getElementById('noResults');
+            
+            grid.innerHTML = '';
+            
+            const filtered = gymData.filter(item => {
+                const matchesCat = state.filterCategory === 'all' || item.category === state.filterCategory;
+                const searchLower = state.searchQuery.toLowerCase();
+                const matchesSearch = item.ru.toLowerCase().includes(searchLower) || 
+                                      item.en.toLowerCase().includes(searchLower);
+                return matchesCat && matchesSearch;
+            });
+
+            if (filtered.length === 0) {
+                noResults.classList.remove('hidden');
+            } else {
+                noResults.classList.add('hidden');
+                filtered.forEach((item, index) => {
+                    const card = document.createElement('div');
+                    // Staggered animation based on index
+                    card.style.animationDelay = `${index * 0.05}s`;
+                    card.className = 'fade-in bg-white p-6 rounded-2xl border border-stone-100 shadow-sm hover:shadow-lg hover:border-amber-200 transition-all duration-300 group';
+                    
+                    const catColor = config.colors[item.category];
+                    
+                    card.innerHTML = `
+                        <div class="flex justify-between items-start mb-3">
+                            <h3 class="font-bold text-stone-800 text-lg leading-tight">${item.ru}</h3>
+                            <button onclick="speak('${item.en.replace(/'/g, "\\'")}')" class="text-stone-300 hover:text-amber-500 transition-colors p-1" title="Прослушать">
+                                🔊
+                            </button>
+                        </div>
+                        <p class="text-stone-800 font-medium text-lg mb-1 group-hover:text-amber-600 transition-colors">${item.en}</p>
+                        <div class="flex justify-between items-center mt-3 pt-3 border-t border-stone-50">
+                            <p class="text-stone-400 italic text-sm font-light">${item.trans}</p>
+                            <span class="text-[10px] px-2 py-1 rounded-full font-bold uppercase tracking-wide opacity-70" style="background-color: ${catColor}20; color: ${catColor}">
+                                ${config.labels[item.category]}
+                            </span>
+                        </div>
+                    `;
+                    grid.appendChild(card);
+                });
+            }
+        }
+
+        // --- TRAINER ---
+        function updateTrainerUI() {
+            if (state.activeCards.length === 0) {
+                // All cards learned state
+                document.getElementById('flashcard').innerHTML = `
+                    <div class="card-face card-front bg-emerald-50 border-2 border-emerald-100">
+                        <div class="text-6xl mb-4">🎉</div>
+                        <h3 class="text-2xl font-bold text-emerald-800 mb-2">Отличная работа!</h3>
+                        <p class="text-emerald-600">Вы прошли все карточки в этой сессии.</p>
+                        <button onclick="resetLearned()" class="mt-6 px-6 py-3 bg-emerald-600 text-white rounded-xl shadow-lg hover:bg-emerald-700 transition">Начать заново</button>
+                    </div>
+                `;
+                return;
+            }
+
+            const item = state.activeCards[state.currentCardIndex];
+            const cardEl = document.getElementById('flashcard');
+            
+            // Reset Flip
+            cardEl.parentElement.classList.remove('is-flipped');
+
+            // Set Content
+            setTimeout(() => {
+                document.getElementById('cardRu').textContent = item.ru;
+                document.getElementById('cardEn').textContent = item.en;
+                document.getElementById('cardTrans').textContent = item.trans;
+                
+                // Badge
+                const badge = document.getElementById('categoryBadgeTrainer');
+                badge.textContent = config.labels[item.category];
+                badge.style.color = config.colors[item.category];
+                
+                // Counters & Progress
+                document.getElementById('currentCardNum').textContent = state.currentCardIndex + 1;
+                document.getElementById('totalCardsNum').textContent = state.activeCards.length;
+                
+                const progress = ((state.currentCardIndex + 1) / state.activeCards.length) * 100;
+                document.getElementById('progressBar').style.width = `${progress}%`;
+            }, 200);
+        }
+
+        function flipCard() {
+            const cardContainer = document.getElementById('flashcard').parentElement;
+            cardContainer.classList.toggle('is-flipped');
+        }
+
+        function nextCard() {
+            if (state.activeCards.length === 0) return;
+            state.currentCardIndex = (state.currentCardIndex + 1) % state.activeCards.length;
+            updateTrainerUI();
+        }
+
+        function prevCard() {
+            if (state.activeCards.length === 0) return;
+            state.currentCardIndex = (state.currentCardIndex - 1 + state.activeCards.length) % state.activeCards.length;
+            updateTrainerUI();
+        }
+
+        function playAudioFromCard(e) {
+            e.stopPropagation(); // Prevent flip
+            const text = state.activeCards[state.currentCardIndex].en;
+            speak(text);
+        }
+
+        function markAsLearned(e) {
+            e.stopPropagation(); // Prevent flip
+            const learnedItem = state.activeCards.splice(state.currentCardIndex, 1)[0];
+            state.learnedCards.push(learnedItem);
+            
+            // Adjust index if it was the last card
+            if (state.currentCardIndex >= state.activeCards.length) {
+                state.currentCardIndex = 0;
+            }
+            
+            updateTrainerUI();
+        }
+
+        function resetLearned() {
+            state.activeCards = [...gymData]; // Reset to full list
+            state.learnedCards = [];
+            state.currentCardIndex = 0;
+            shuffleCards();
+            // Re-render handled by shuffle
+        }
+
+        function shuffleCards() {
+            for (let i = state.activeCards.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [state.activeCards[i], state.activeCards[j]] = [state.activeCards[j], state.activeCards[i]];
+            }
+            state.currentCardIndex = 0;
+            updateTrainerUI();
+        }
+
+        // --- UTILS ---
+        function scrollToSection(id) {
+            document.getElementById(id).scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // --- EVENTS ---
+        document.getElementById('searchInput').addEventListener('input', (e) => {
+            state.searchQuery = e.target.value;
+            renderDictionary();
+        });
+
+        document.getElementById('categoryFilter').addEventListener('change', (e) => {
+            state.filterCategory = e.target.value;
+            renderDictionary();
+        });
+
+        // Keyboard Navigation
+        document.addEventListener('keydown', (e) => {
+            // Only if trainer is in viewport (simple check)
+            const trainerRect = document.getElementById('trainer').getBoundingClientRect();
+            const isInView = trainerRect.top < window.innerHeight && trainerRect.bottom > 0;
+
+            if (isInView && document.activeElement.tagName !== 'INPUT') {
+                if (e.code === 'ArrowRight') nextCard();
+                if (e.code === 'ArrowLeft') prevCard();
+                if (e.code === 'Space') {
+                    e.preventDefault(); // Prevent scroll
+                    flipCard();
+                }
+            }
+        });
+
+        // --- INIT ---
+        window.addEventListener('load', () => {
+            initChart();
+            renderDictionary();
+            updateTrainerUI();
+        });
+
+    </script>
+</body>
+</html>
