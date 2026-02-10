@@ -44,7 +44,7 @@
         }
         .is-flipped .card-inner { transform: rotateY(180deg); }
         .card-face {
-            /* FIX: Added !important to override any conflicting Tailwind classes like 'relative' */
+            /* Keep absolute positioning deterministic for both sides of the 3D flip card. */
             position: absolute !important;
             top: 0;
             left: 0;
@@ -231,18 +231,25 @@
                             <div class="card-face card-back overflow-hidden">
                                 <div class="absolute top-0 left-0 w-full h-1 bg-amber-500"></div>
                                 <div class="absolute top-4 right-4">
-                                    <button onclick="playAudioFromCard(event)" class="w-10 h-10 rounded-full bg-amber-50 hover:bg-amber-100 text-amber-600 flex items-center justify-center transition-colors">
+                                    <button id="cardAudioBtn" onclick="playAudioFromCard(event)" class="w-10 h-10 rounded-full bg-amber-50 hover:bg-amber-100 text-amber-600 flex items-center justify-center transition-colors">
                                         🔊
                                     </button>
                                 </div>
                                 <div class="text-5xl mb-4 opacity-80 grayscale">🇬🇧</div>
                                 <h3 id="cardEn" class="text-2xl md:text-3xl font-bold text-stone-900 mb-2 px-4">...</h3>
                                 <p id="cardTrans" class="text-lg text-amber-600 italic font-medium mb-6">...</p>
-                                <button onclick="markAsLearned(event)" class="mb-4 px-4 py-2 bg-stone-100 hover:bg-green-100 hover:text-green-700 text-stone-500 rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
+                                <button id="markLearnedBtn" onclick="markAsLearned(event)" class="mb-4 px-4 py-2 bg-stone-100 hover:bg-green-100 hover:text-green-700 text-stone-500 rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
                                     <span>✅</span> Я выучил это
                                 </button>
                             </div>
                         </div>
+                    </div>
+
+                    <div id="completionState" class="hidden mt-4 p-6 rounded-2xl border border-emerald-200 bg-emerald-50 text-emerald-800">
+                        <div class="text-4xl mb-2">🎉</div>
+                        <h3 class="text-xl font-bold mb-2">Отличная работа!</h3>
+                        <p class="text-emerald-700">Вы прошли все карточки в этой сессии.</p>
+                        <button onclick="resetLearned()" class="mt-4 px-5 py-2.5 bg-emerald-600 text-white rounded-xl shadow hover:bg-emerald-700 transition">Начать заново</button>
                     </div>
 
                     <!-- Buttons -->
@@ -290,9 +297,9 @@
             { ru: "Жим гантелей", en: "Dumbbell bench press", trans: "Дамбэл бэнч пресс", category: "exercises" },
             { ru: "Сгибание рук", en: "Biceps curls", trans: "Байсепс кёрлз", category: "exercises" },
             { ru: "Разгибание рук", en: "Triceps extensions", trans: "Трайсепс экстэншнз", category: "exercises" },
-            { ru: "Тяга штанги в наклоне", en: "Bent-over barbell row", trans: "Бэнт оувер барбэл роув", category: "exercises" },
+            { ru: "Тяга штанги в наклоне", en: "Bent-over barbell row", trans: "Бэнт оувер барбэл роу", category: "exercises" },
             { ru: "Тяга вертикального блока", en: "Lat pulldown", trans: "Лэт пулдаун", category: "exercises" },
-            { ru: "Тяга горизонтального блока", en: "Seated cable row", trans: "Ситид кэйбл роув", category: "exercises" },
+            { ru: "Тяга горизонтального блока", en: "Seated cable row", trans: "Ситид кэйбл роу", category: "exercises" },
             { ru: "Делай подход", en: "Do a set", trans: "Ду э сет", category: "exercises" },
             { ru: "Делать растяжку", en: "Do stretching", trans: "Ду стрэчинг", category: "exercises" },
             { ru: "9–15 повторений", en: "9–15 reps", trans: "Найн ту фифтин репс", category: "process" },
@@ -460,21 +467,32 @@
 
         // --- TRAINER ---
         function updateTrainerUI() {
+            const cardContainer = document.getElementById('flashcard').parentElement;
+            const completionState = document.getElementById('completionState');
+            const audioBtn = document.getElementById('cardAudioBtn');
+            const markLearnedBtn = document.getElementById('markLearnedBtn');
+
             if (state.activeCards.length === 0) {
-                // All cards learned state
-                document.getElementById('flashcard').innerHTML = `
-                    <div class="card-face card-front bg-emerald-50 border-2 border-emerald-100">
-                        <div class="text-6xl mb-4">🎉</div>
-                        <h3 class="text-2xl font-bold text-emerald-800 mb-2">Отличная работа!</h3>
-                        <p class="text-emerald-600">Вы прошли все карточки в этой сессии.</p>
-                        <button onclick="resetLearned()" class="mt-6 px-6 py-3 bg-emerald-600 text-white rounded-xl shadow-lg hover:bg-emerald-700 transition">Начать заново</button>
-                    </div>
-                `;
+                cardContainer.classList.remove('is-flipped');
+                completionState.classList.remove('hidden');
+                audioBtn.classList.add('hidden');
+                markLearnedBtn.classList.add('hidden');
+
+                document.getElementById('cardRu').textContent = 'Все карточки пройдены';
+                document.getElementById('cardEn').textContent = 'Great job! Session complete.';
+                document.getElementById('cardTrans').textContent = 'Нажмите «Начать заново», чтобы повторить.';
+                document.getElementById('categoryBadgeTrainer').textContent = 'Готово';
+                document.getElementById('currentCardNum').textContent = 0;
+                document.getElementById('totalCardsNum').textContent = 0;
+                document.getElementById('progressBar').style.width = '100%';
                 return;
             }
 
             const item = state.activeCards[state.currentCardIndex];
             const cardEl = document.getElementById('flashcard');
+            completionState.classList.add('hidden');
+            audioBtn.classList.remove('hidden');
+            markLearnedBtn.classList.remove('hidden');
             
             // Reset Flip
             cardEl.parentElement.classList.remove('is-flipped');
@@ -500,6 +518,7 @@
         }
 
         function flipCard() {
+            if (state.activeCards.length === 0) return;
             const cardContainer = document.getElementById('flashcard').parentElement;
             cardContainer.classList.toggle('is-flipped');
         }
@@ -518,12 +537,14 @@
 
         function playAudioFromCard(e) {
             e.stopPropagation(); // Prevent flip
+            if (state.activeCards.length === 0) return;
             const text = state.activeCards[state.currentCardIndex].en;
             speak(text);
         }
 
         function markAsLearned(e) {
             e.stopPropagation(); // Prevent flip
+            if (state.activeCards.length === 0) return;
             const learnedItem = state.activeCards.splice(state.currentCardIndex, 1)[0];
             state.learnedCards.push(learnedItem);
             
